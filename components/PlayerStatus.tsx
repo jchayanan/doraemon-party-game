@@ -5,6 +5,7 @@ interface PlayerStatusProps {
   playerCount: number;
   isMyTurn: boolean;
   deckRemaining: number;
+  currentTurnName?: string;
 }
 
 export default function PlayerStatus({
@@ -12,6 +13,7 @@ export default function PlayerStatus({
   playerCount,
   isMyTurn,
   deckRemaining,
+  currentTurnName,
 }: PlayerStatusProps) {
   return (
     <div className="flex flex-col items-center gap-3 pt-2 pb-1">
@@ -46,7 +48,9 @@ export default function PlayerStatus({
       ) : (
         <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-5 py-2">
           <span className="text-white/30 text-lg">⏳</span>
-          <span className="text-white/40 font-medium text-base">รอผู้เล่นคนอื่น...</span>
+          <span className="text-white/40 font-medium text-base">
+            {currentTurnName ? `เทิร์นของ ${currentTurnName}` : "รอผู้เล่นคนอื่น..."}
+          </span>
         </div>
       )}
     </div>

@@ -16,7 +16,7 @@ interface GameBoardProps {
 
 export default function GameBoard({ code }: GameBoardProps) {
   const router = useRouter();
-  const { playerId, initPlayer, setRoom } = useGameStore();
+  const { playerId, playerName, initPlayer, setRoom } = useGameStore();
   const room = useGameStore((s) => s.room);
   const [drawCount, setDrawCount] = useState(0);
   const [drawing, setDrawing] = useState(false);
@@ -49,12 +49,18 @@ export default function GameBoard({ code }: GameBoardProps) {
 
       const roomData = existing as RoomRow;
 
-      // Add player to room if not already in it
+      // Always update our name in player_names (in case it changed)
+      const updatedNames = {
+        ...(roomData.player_names ?? {}),
+        [playerId]: playerName || "ผู้เล่น",
+      };
+
       if (!roomData.player_ids.includes(playerId)) {
-        const updated = [...roomData.player_ids, playerId];
+        // New player joining
+        const updatedIds = [...roomData.player_ids, playerId];
         const { data: updated_room, error: joinErr } = await supabase
           .from("rooms")
-          .update({ player_ids: updated })
+          .update({ player_ids: updatedIds, player_names: updatedNames })
           .eq("room_code", code)
           .select()
           .single();
@@ -65,7 +71,21 @@ export default function GameBoard({ code }: GameBoardProps) {
         }
         if (!ignore) setRoom(updated_room as RoomRow);
       } else {
-        if (!ignore) setRoom(roomData);
+        // Already in room — just update name if needed
+        const needsUpdate =
+          (roomData.player_names ?? {})[playerId] !== (playerName || "ผู้เล่น");
+        if (needsUpdate) {
+          const { data: updated_room } = await supabase
+            .from("rooms")
+            .update({ player_names: updatedNames })
+            .eq("room_code", code)
+            .select()
+            .single();
+          if (!ignore && updated_room) setRoom(updated_room as RoomRow);
+          else if (!ignore) setRoom(roomData);
+        } else {
+          if (!ignore) setRoom(roomData);
+        }
       }
     }
 
@@ -98,7 +118,7 @@ export default function GameBoard({ code }: GameBoardProps) {
       ignore = true;
       supabase.removeChannel(channel);
     };
-  }, [playerId, code, setRoom]);
+  }, [playerId, playerName, code, setRoom]);
 
   const handleDraw = useCallback(async () => {
     if (!room || drawing) return;
@@ -172,7 +192,7 @@ export default function GameBoard({ code }: GameBoardProps) {
 
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-6 bg-[oklch(0.09_0.01_230)]">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-6">
         <span className="text-5xl">😵</span>
         <p className="text-white/60 text-center text-base">{error}</p>
         <button
@@ -189,7 +209,7 @@ export default function GameBoard({ code }: GameBoardProps) {
   if (room && room.status === "waiting") {
     const isHost = room.player_ids[0] === playerId;
     return (
-      <div className="min-h-screen flex flex-col bg-[oklch(0.09_0.01_230)] px-6 pt-14 pb-8 overflow-y-auto">
+      <div className="min-h-screen flex flex-col px-6 pt-14 pb-8 overflow-y-auto">
         {/* Header */}
         <div className="flex flex-col items-center gap-1 mb-8">
           <div
@@ -230,7 +250,10 @@ export default function GameBoard({ code }: GameBoardProps) {
 
                 {/* Name */}
                 <span className="flex-1 font-semibold text-sm text-white">
-                  {isMe ? "👤 คุณ" : `👤 ผู้เล่น ${i + 1}`}
+                  👤 {room.player_names?.[pid] ?? `ผู้เล่น ${i + 1}`}
+                  {isMe && (
+                    <span className="ml-1.5 text-[10px] text-white/40 font-normal">(คุณ)</span>
+                  )}
                 </span>
 
                 {/* Badges */}
@@ -307,7 +330,7 @@ export default function GameBoard({ code }: GameBoardProps) {
 
   if (!room) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[oklch(0.09_0.01_230)]">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
         <div
           className="w-10 h-10 rounded-full border-4 border-blue-500/30 border-t-blue-400"
           style={{ animation: "spin 1s linear infinite" }}
@@ -324,7 +347,7 @@ export default function GameBoard({ code }: GameBoardProps) {
   const isFinished = room.status === "finished" || room.deck.length === 0;
 
   return (
-    <div className="min-h-screen flex flex-col bg-[oklch(0.09_0.01_230)]">
+    <div className="min-h-screen flex flex-col">
       {/* Header */}
       <div className="pt-safe px-4 pt-6 pb-2">
         <PlayerStatus
@@ -332,6 +355,11 @@ export default function GameBoard({ code }: GameBoardProps) {
           playerCount={room.player_ids.length}
           isMyTurn={isMyTurn}
           deckRemaining={room.deck.length}
+          currentTurnName={
+            !isMyTurn
+              ? (room.player_names?.[room.player_ids[room.current_turn_index]] ?? undefined)
+              : undefined
+          }
         />
       </div>
 

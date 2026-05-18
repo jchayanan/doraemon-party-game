@@ -10,6 +10,7 @@ export type RoomRow = {
   room_code: string;
   status: "waiting" | "playing" | "finished";
   player_ids: string[];
+  player_names: Record<string, string>;
   current_turn_index: number;
   deck: string[];
   current_card: string | null;

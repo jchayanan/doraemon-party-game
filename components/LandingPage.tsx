@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { useGameStore } from "@/lib/store";
+import { useGameStore, pickRandomName } from "@/lib/store";
 import { createShuffledDeck } from "@/lib/deck";
-import { useEffect } from "react";
 
 function generateRoomCode(): string {
   return Math.random().toString(36).substring(2, 7).toUpperCase();
@@ -13,17 +12,35 @@ function generateRoomCode(): string {
 
 export default function LandingPage() {
   const router = useRouter();
-  const { initPlayer, playerId } = useGameStore();
+  const { initPlayer, playerId, playerName, setPlayerName } = useGameStore();
   const [joinCode, setJoinCode] = useState("");
   const [loading, setLoading] = useState<"create" | "join" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [nameInput, setNameInput] = useState("");
 
   useEffect(() => {
     initPlayer();
   }, [initPlayer]);
 
+  // Sync nameInput with store once loaded
+  useEffect(() => {
+    if (playerName) setNameInput(playerName);
+  }, [playerName]);
+
+  function handleRandomName() {
+    const pick = pickRandomName(nameInput);
+    setNameInput(pick);
+    setPlayerName(pick);
+  }
+
+  function handleNameChange(val: string) {
+    setNameInput(val);
+    setPlayerName(val);
+  }
+
   async function handleCreate() {
     if (!playerId) return;
+    const name = nameInput.trim() || playerName || "ผู้เล่น";
     setLoading("create");
     setError(null);
 
@@ -34,6 +51,7 @@ export default function LandingPage() {
       room_code: roomCode,
       deck,
       player_ids: [playerId],
+      player_names: { [playerId]: name },
       current_turn_index: 0,
       status: "waiting",
       current_card: null,
@@ -74,9 +92,9 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[oklch(0.09_0.01_230)] px-6 py-12 overflow-y-auto">
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12 overflow-y-auto">
       {/* Hero */}
-      <div className="flex flex-col items-center gap-4 mb-12 text-center">
+      <div className="flex flex-col items-center gap-4 mb-10 text-center">
         <div
           className="w-24 h-24 rounded-full flex items-center justify-center text-5xl shadow-2xl"
           style={{
@@ -84,27 +102,61 @@ export default function LandingPage() {
             boxShadow: "0 0 60px oklch(0.55 0.22 230 / 0.4)",
           }}
         >
-          🎮
+          🍻
         </div>
         <h1 className="text-3xl font-black text-white tracking-tight leading-tight">
           Doraemon<br />Card Game
         </h1>
         <p className="text-white/40 text-sm leading-relaxed max-w-xs">
-          เกมไพ่ปาร์ตี้สุดฮา สำหรับเพื่อนกลุ่มนั้น 🍻
+          แพรวโบว์ X 3สหาย D'kids
         </p>
       </div>
 
-      {/* Actions */}
-      <div className="w-full max-w-xs flex flex-col gap-4">
+      <div className="w-full max-w-xs flex flex-col gap-5">
+        {/* Name picker */}
+        <div className="flex flex-col gap-2">
+          <label className="text-white/40 text-xs uppercase tracking-widest pl-1">
+            ชื่อของคุณ
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="player-name-input"
+              type="text"
+              placeholder="ใส่ชื่อ..."
+              value={nameInput}
+              onChange={(e) => handleNameChange(e.target.value)}
+              maxLength={20}
+              className="flex-1 rounded-2xl bg-white/5 border border-white/10 text-white text-sm font-semibold py-3.5 px-4 placeholder:text-white/20 focus:outline-none focus:border-blue-500/50 focus:bg-white/8 transition-colors"
+            />
+            <button
+              id="random-name-btn"
+              type="button"
+              onClick={handleRandomName}
+              title="สุ่มชื่อ"
+              className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl bg-white/5 border border-white/10 text-white transition-all duration-150 active:scale-90 hover:bg-white/10"
+            >
+              🎲
+            </button>
+          </div>
+          {nameInput && (
+            <p className="text-white/30 text-xs pl-1">
+              ทุกคนในห้องจะเห็นคุณเป็น <span className="text-white/60 font-semibold">"{nameInput}"</span>
+            </p>
+          )}
+        </div>
+
+        {/* Divider */}
+        <div className="h-px bg-white/8" />
+
         {/* Create Room */}
         <button
           id="create-room-btn"
           onClick={handleCreate}
-          disabled={loading !== null}
+          disabled={loading !== null || !nameInput.trim()}
           className="relative w-full rounded-2xl py-5 text-lg font-black text-white tracking-wide transition-all duration-200 active:scale-95 disabled:opacity-50"
           style={{
             background: "oklch(0.55 0.22 230)",
-            boxShadow: loading === null
+            boxShadow: loading === null && nameInput.trim()
               ? "0 0 40px oklch(0.55 0.22 230 / 0.4)"
               : "none",
           }}
@@ -123,7 +175,7 @@ export default function LandingPage() {
         </button>
 
         {/* Divider */}
-        <div className="flex items-center gap-3 my-1">
+        <div className="flex items-center gap-3">
           <div className="flex-1 h-px bg-white/10" />
           <span className="text-white/30 text-xs uppercase tracking-widest">หรือ</span>
           <div className="flex-1 h-px bg-white/10" />
@@ -158,7 +210,7 @@ export default function LandingPage() {
           <button
             id="join-room-btn"
             type="submit"
-            disabled={loading !== null || !joinCode.trim()}
+            disabled={loading !== null || !joinCode.trim() || !nameInput.trim()}
             className="w-full rounded-2xl py-4 text-base font-bold text-white border border-white/15 bg-white/8 transition-all duration-200 active:scale-95 disabled:opacity-40"
           >
             {loading === "join" ? (

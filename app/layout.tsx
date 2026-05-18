@@ -35,7 +35,7 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="theme-color" content="#0b0d12" />
       </head>
-      <body className="min-h-full font-sans bg-[oklch(0.09_0.01_230)] text-white antialiased">
+      <body className="min-h-full font-sans text-white antialiased">
         {children}
       </body>
     </html>
