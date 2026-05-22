@@ -2,6 +2,7 @@
 
 import { CARD_DESCRIPTIONS, cardValue, cardSuit } from "@/lib/deck";
 import { useEffect, useState, useRef, useCallback } from "react";
+import confetti from "canvas-confetti";
 
 interface CardDisplayProps {
   card: string | null;
@@ -313,20 +314,60 @@ export default function CardDisplay({ card, drawCount, onDraw, canDraw }: CardDi
     }
   }, [isDragging, dragAngle, onDraw]);
 
+  // ── Confetti for King ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (phase === "face-up" && displayedCard && cardValue(displayedCard) === "K") {
+      // Royal burst from both top corners
+      const fire = (originX: number) => {
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { x: originX, y: 0.1 },
+          colors: ["#FFD700", "#FFA500", "#FFFACD", "#FF6B6B", "#C0392B", "#8B0000"],
+          startVelocity: 45,
+          gravity: 0.8,
+          scalar: 1.1,
+          ticks: 200,
+        });
+      };
+      fire(0.2);
+      fire(0.8);
+      // Second wave with a slight delay
+      const t = setTimeout(() => {
+        confetti({
+          particleCount: 60,
+          spread: 120,
+          origin: { x: 0.5, y: 0.05 },
+          colors: ["#FFD700", "#FFA500", "#FFFACD", "#FF6B6B"],
+          startVelocity: 30,
+          gravity: 0.6,
+          scalar: 0.9,
+          ticks: 250,
+        });
+      }, 350);
+      return () => clearTimeout(t);
+    }
+  }, [phase, displayedCard]);
+
   // ── Derived values ─────────────────────────────────────────────────────────
   const parsedValue = displayedCard ? cardValue(displayedCard) : "";
   const parsedSuit = displayedCard ? (cardSuit(displayedCard) as Suit) : "♠";
   const description = parsedValue ? (CARD_DESCRIPTIONS[parsedValue] ?? "") : "";
 
-  // When it's the player's turn, always show a draggable card back
-  // (overrides the previously drawn face-up card)
-  const showDraggableBack = canDraw && phase !== "face-down";
+  // When it's my turn:
+  // - If there's already a face-up card → show that face-up card (draggable, flip FROM it)
+  // - If there's no card yet (first turn) → show CardBack (draggable)
+  // showDraggableCard = true whenever it's my turn and the flip animation isn't mid-flight
+  const showDraggableCard = canDraw && phase !== "face-down";
+
+  // Show card back only when it's my turn AND there's no previous card to show
+  const showBackInstead = showDraggableCard && !displayedCard;
 
   // ── Transform computation ──────────────────────────────────────────────────
   let transform: string;
   let transition: string;
 
-  if (showDraggableBack && (isDragging || dragAngle > 0)) {
+  if (showDraggableCard && (isDragging || dragAngle > 0)) {
     // During active drag or snap/spring animation
     if (isDragging) {
       transition = "none";
@@ -352,7 +393,7 @@ export default function CardDisplay({ card, drawCount, onDraw, canDraw }: CardDi
     transition,
     transformStyle: "preserve-3d",
     transform,
-    cursor: showDraggableBack
+    cursor: showDraggableCard
       ? isDragging
         ? "grabbing"
         : "grab"
@@ -388,16 +429,24 @@ export default function CardDisplay({ card, drawCount, onDraw, canDraw }: CardDi
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
           >
-            {showDraggableBack || phase === "face-down" || !displayedCard ? (
+            {/* mid-flip (face-down phase) always shows CardBack */}
+            {phase === "face-down" ? (
               <CardBack />
-            ) : (
+            ) : showBackInstead ? (
+              /* My turn, no previous card → show CardBack */
+              <CardBack />
+            ) : displayedCard ? (
+              /* Show face-up card: either current card (observer) or previous card (my turn, draggable) */
               <CardFace value={parsedValue} suit={parsedSuit} />
+            ) : (
+              /* No card at all, not my turn */
+              <CardBack />
             )}
           </div>
         </div>
 
         {/* Drag threshold progress bar — visible only when dragging */}
-        {showDraggableBack && isDragging && (
+        {showDraggableCard && isDragging && (
           <div
             style={{
               width: 140,
@@ -422,32 +471,10 @@ export default function CardDisplay({ card, drawCount, onDraw, canDraw }: CardDi
           </div>
         )}
 
-        {/* Drag hint — visible when it's the player's turn and not dragging */}
-        {showDraggableBack && !isDragging && !isAnimating && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              color: "rgba(255,255,255,0.45)",
-              fontSize: 13,
-              fontWeight: 600,
-              letterSpacing: "0.04em",
-              userSelect: "none",
-            }}
-          >
-            <span style={{ display: "inline-block", animation: "nudgeLeft 1.4s ease-in-out infinite" }}>
-              ←
-            </span>
-            ลากเพื่อพลิกไพ่
-            <span style={{ display: "inline-block", animation: "nudgeRight 1.4s ease-in-out infinite" }}>
-              →
-            </span>
-          </div>
-        )}
 
-        {/* Card description */}
-        {phase === "face-up" && !canDraw && displayedCard ? (
+
+        {/* Card description — shown to everyone once face-up */}
+        {phase === "face-up" && displayedCard ? (
           <div
             className="max-w-[280px] text-center"
             style={{
@@ -458,7 +485,7 @@ export default function CardDisplay({ card, drawCount, onDraw, canDraw }: CardDi
           >
             <p className="text-white text-lg font-semibold leading-relaxed">{description}</p>
           </div>
-        ) : !displayedCard && !canDraw ? (
+        ) : !displayedCard ? (
           <p className="text-white/30 text-sm tracking-wide mt-2">รอจั่วไพ่...</p>
         ) : null}
       </div>
