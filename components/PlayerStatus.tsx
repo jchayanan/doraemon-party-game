@@ -6,6 +6,7 @@ interface PlayerStatusProps {
   isMyTurn: boolean;
   deckRemaining: number;
   currentTurnName?: string;
+  onLeave?: () => void;
 }
 
 export default function PlayerStatus({
@@ -14,15 +15,22 @@ export default function PlayerStatus({
   isMyTurn,
   deckRemaining,
   currentTurnName,
+  onLeave,
 }: PlayerStatusProps) {
   return (
     <div className="flex flex-col items-center gap-3 pt-2 pb-1">
       {/* Room code + player count row */}
       <div className="flex items-center gap-3 flex-wrap justify-center">
-        <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-1.5">
-          <span className="text-white/40 text-xs uppercase tracking-widest">Room</span>
-          <span className="text-white font-bold text-sm tracking-widest">{roomCode}</span>
-        </div>
+        {onLeave && (
+          <button
+            onClick={onLeave}
+            className="flex items-center justify-center bg-white/5 border border-white/10 hover:bg-white/10 rounded-full w-9 h-9 text-base transition-all active:scale-90"
+            title="ออกจากห้อง"
+            aria-label="ออกจากห้อง"
+          >
+            🚪
+          </button>
+        )}
         <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-4 py-1.5">
           <span className="text-white/40 text-sm">👥</span>
           <span className="text-white font-semibold text-sm">{playerCount} คน</span>

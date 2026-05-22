@@ -190,6 +190,46 @@ export default function GameBoard({ code }: GameBoardProps) {
       .eq("room_code", code);
   }, [room, code]);
 
+  const handleLeaveRoom = useCallback(async () => {
+    if (!room || !playerId) {
+      router.push("/");
+      return;
+    }
+
+    const updatedIds = room.player_ids.filter((id) => id !== playerId);
+    const updatedNames = { ...room.player_names };
+    delete updatedNames[playerId];
+
+    const isLastPlayer = updatedIds.length === 0;
+    const newStatus = isLastPlayer ? "finished" : room.status;
+
+    // Adjust turn index if the leaving player's index was before or equal to current turn
+    let newTurnIndex = room.current_turn_index;
+    if (!isLastPlayer) {
+      const leavingIndex = room.player_ids.indexOf(playerId);
+      if (leavingIndex !== -1) {
+        if (leavingIndex < room.current_turn_index) {
+          newTurnIndex = Math.max(0, room.current_turn_index - 1);
+        }
+        if (newTurnIndex >= updatedIds.length) {
+          newTurnIndex = 0;
+        }
+      }
+    }
+
+    await supabase
+      .from("rooms")
+      .update({
+        player_ids: updatedIds,
+        player_names: updatedNames,
+        status: newStatus,
+        current_turn_index: newTurnIndex,
+      })
+      .eq("room_code", code);
+
+    router.push("/");
+  }, [room, playerId, code, router]);
+
   if (error) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-6">
@@ -319,7 +359,7 @@ export default function GameBoard({ code }: GameBoardProps) {
         )}
 
         <button
-          onClick={() => router.push("/")}
+          onClick={handleLeaveRoom}
           className="mt-4 text-white/30 text-sm text-center w-full py-2"
         >
           ออกจากห้อง
@@ -360,6 +400,7 @@ export default function GameBoard({ code }: GameBoardProps) {
               ? (room.player_names?.[room.player_ids[room.current_turn_index]] ?? undefined)
               : undefined
           }
+          onLeave={handleLeaveRoom}
         />
       </div>
 
@@ -391,7 +432,7 @@ export default function GameBoard({ code }: GameBoardProps) {
               {resetting ? "กำลังรีเซ็ต..." : "🔄 รีเซ็ตเกม (เล่นรอบใหม่)"}
             </button>
             <button
-              onClick={() => router.push("/")}
+              onClick={handleLeaveRoom}
               className="w-full rounded-2xl border border-white/15 bg-white/10 text-white py-4 font-bold text-base active:scale-95 transition-transform"
             >
               ออกจากห้อง

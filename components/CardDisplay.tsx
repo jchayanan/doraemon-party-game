@@ -27,13 +27,13 @@ const PIP_LAYOUTS: Record<string, [number, number][]> = {
   "10":[[0, 0], [2, 0], [1, 1], [0, 2], [2, 2], [0, 4], [2, 4], [1, 5], [0, 6], [2, 6]],
 };
 
-const COL_X = ["18%", "50%", "82%"];
-const ROW_Y = ["10%", "23%", "36%", "50%", "64%", "77%", "90%"];
+const COL_X = ["22%", "50%", "78%"];
+const ROW_Y = ["12%", "18%", "34%", "50%", "66%", "82%", "88%"];
 
 function PipGrid({ value, suit, red }: { value: string; suit: string; red: boolean }) {
   const layout = PIP_LAYOUTS[value];
   if (!layout) return null;
-  const color = red ? "#dc2626" : "#1e293b";
+  const color = red ? "#e81010" : "#111111";
   return (
     <div className="absolute inset-0 pointer-events-none">
       {layout.map(([col, row], i) => {
@@ -47,7 +47,7 @@ function PipGrid({ value, suit, red }: { value: string; suit: string; red: boole
               left: COL_X[col],
               top: ROW_Y[row],
               transform: `translate(-50%, -50%)${rotate ? " rotate(180deg)" : ""}`,
-              fontSize: value === "A" ? "5rem" : "2.2rem",
+              fontSize: value === "A" ? "7.5rem" : "4.2rem",
               lineHeight: 1,
               color,
               userSelect: "none",
@@ -70,7 +70,7 @@ const FACE_ART: Record<string, { emoji: string; title: string }> = {
 
 function CardFace({ value, suit }: { value: string; suit: Suit }) {
   const red = RED_SUITS.has(suit);
-  const textColor = red ? "#dc2626" : "#1e293b";
+  const textColor = red ? "#e81010" : "#111111";
   const faceArt = FACE_ART[value];
 
   return (
@@ -87,49 +87,45 @@ function CardFace({ value, suit }: { value: string; suit: Suit }) {
         flexShrink: 0,
       }}
     >
-      {/* Inner border frame */}
-      <div
-        style={{
-          position: "absolute",
-          inset: 7,
-          borderRadius: 10,
-          border: `1.5px solid ${red ? "#fca5a5" : "#94a3b8"}`,
-          opacity: 0.5,
-          pointerEvents: "none",
-        }}
-      />
-
       {/* Top-left corner */}
       <div
         style={{
           position: "absolute",
-          top: 12,
-          left: 14,
-          lineHeight: 1,
+          top: 10,
+          left: 12,
+          lineHeight: 0.95,
           color: textColor,
           fontWeight: 900,
-          fontFamily: "Georgia, serif",
+          fontFamily: "Georgia, 'Times New Roman', serif",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          width: 36,
         }}
       >
-        <div style={{ fontSize: 30 }}>{value}</div>
-        <div style={{ fontSize: 22, marginTop: -2 }}>{suit}</div>
+        <div style={{ fontSize: 34, letterSpacing: "-0.05em" }}>{value}</div>
+        <div style={{ fontSize: 22, marginTop: 1 }}>{suit}</div>
       </div>
 
       {/* Bottom-right corner (rotated) */}
       <div
         style={{
           position: "absolute",
-          bottom: 12,
-          right: 14,
-          lineHeight: 1,
+          bottom: 10,
+          right: 12,
+          lineHeight: 0.95,
           color: textColor,
           fontWeight: 900,
-          fontFamily: "Georgia, serif",
+          fontFamily: "Georgia, 'Times New Roman', serif",
           transform: "rotate(180deg)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          width: 36,
         }}
       >
-        <div style={{ fontSize: 30 }}>{value}</div>
-        <div style={{ fontSize: 22, marginTop: -2 }}>{suit}</div>
+        <div style={{ fontSize: 34, letterSpacing: "-0.05em" }}>{value}</div>
+        <div style={{ fontSize: 22, marginTop: 1 }}>{suit}</div>
       </div>
 
       {/* Center: pip grid or face art */}
@@ -145,16 +141,16 @@ function CardFace({ value, suit }: { value: string; suit: Suit }) {
             gap: 4,
           }}
         >
-          {/* Hatched background pattern for face cards */}
+          {/* Decorative inner frame for face cards (looks like a real card canvas and won't overlap the corners) */}
           <div
             style={{
               position: "absolute",
-              inset: 18,
+              width: 160,
+              height: 230,
               borderRadius: 8,
-              background: red
-                ? "repeating-linear-gradient(45deg, #fee2e2 0px, #fee2e2 2px, #fef2f2 2px, #fef2f2 8px)"
-                : "repeating-linear-gradient(45deg, #e2e8f0 0px, #e2e8f0 2px, #f8fafc 2px, #f8fafc 8px)",
-              opacity: 0.6,
+              border: `2px solid ${red ? "#fca5a5" : "#cbd5e1"}`,
+              background: red ? "#fff8f8" : "#f8fafc",
+              boxShadow: "inset 0 2px 4px rgba(0,0,0,0.02)",
             }}
           />
           <span style={{ fontSize: "5.5rem", position: "relative" }}>{faceArt.emoji}</span>

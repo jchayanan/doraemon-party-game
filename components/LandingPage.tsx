@@ -96,10 +96,13 @@ export default function LandingPage() {
       {/* Hero */}
       <div className="flex flex-col items-center gap-4 mb-10 text-center">
         <div
-          className="w-24 h-24 rounded-full flex items-center justify-center text-5xl shadow-2xl"
+          className="w-24 h-24 rounded-full flex items-center justify-center text-5xl shadow-2xl border"
           style={{
-            background: "oklch(0.55 0.22 230)",
-            boxShadow: "0 0 60px oklch(0.55 0.22 230 / 0.4)",
+            background: "linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.03) 100%)",
+            borderColor: "rgba(255, 255, 255, 0.2)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            boxShadow: "inset 0 4px 10px rgba(255, 255, 255, 0.2), inset 0 -4px 10px rgba(0, 0, 0, 0.2), 0 0 60px oklch(0.55 0.22 230 / 0.3)",
           }}
         >
           🍻
@@ -234,10 +237,6 @@ export default function LandingPage() {
         )}
       </div>
 
-      {/* Footer hint */}
-      <p className="mt-16 text-white/20 text-xs text-center">
-        ไม่ต้องสมัครสมาชิก • เล่นได้เลย
-      </p>
     </div>
   );
 }
