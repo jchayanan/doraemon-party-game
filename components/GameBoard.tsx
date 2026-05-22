@@ -406,7 +406,12 @@ export default function GameBoard({ code }: GameBoardProps) {
 
       {/* Card area */}
       <div className="flex-1 flex flex-col items-center justify-center">
-        <CardDisplay card={room.current_card} drawCount={drawCount} />
+        <CardDisplay
+          card={room.current_card}
+          drawCount={drawCount}
+          onDraw={handleDraw}
+          canDraw={isMyTurn && !drawing && !isFinished}
+        />
       </div>
 
       {/* Draw button or game over */}

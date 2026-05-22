@@ -1,16 +1,20 @@
 "use client";
 
 import { CARD_DESCRIPTIONS, cardValue, cardSuit } from "@/lib/deck";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 
 interface CardDisplayProps {
   card: string | null;
   drawCount: number;
+  /** Called when user commits a draw (via drag past threshold) */
+  onDraw?: () => void;
+  /** Whether the current player can draw (their turn, game not over, not loading) */
+  canDraw?: boolean;
 }
 
-type Suit = "\u2660" | "\u2665" | "\u2666" | "\u2663";
+type Suit = "♠" | "♥" | "♦" | "♣";
 
-const RED_SUITS: Set<Suit> = new Set(["\u2665", "\u2666"]);
+const RED_SUITS: Set<Suit> = new Set(["♥", "♦"]);
 
 // Pip layout maps for standard playing card pip grids (3×7 grid positions)
 // Each entry is [col (0-2), row (0-6)] — col 1 = center, rows 0–6 top to bottom
@@ -37,7 +41,6 @@ function PipGrid({ value, suit, red }: { value: string; suit: string; red: boole
   return (
     <div className="absolute inset-0 pointer-events-none">
       {layout.map(([col, row], i) => {
-        // Pips in the bottom half are rotated 180°
         const rotate = row > 3 ? "rotate(180deg)" : undefined;
         return (
           <span
@@ -61,7 +64,6 @@ function PipGrid({ value, suit, red }: { value: string; suit: string; red: boole
   );
 }
 
-// Face card art for J / Q / K
 const FACE_ART: Record<string, { emoji: string; title: string }> = {
   J: { emoji: "🤺", title: "JACK" },
   Q: { emoji: "👸", title: "QUEEN" },
@@ -74,7 +76,6 @@ function CardFace({ value, suit }: { value: string; suit: Suit }) {
   const faceArt = FACE_ART[value];
 
   return (
-    // Outer card shell — white with crisp shadow
     <div
       className="relative select-none"
       style={{
@@ -141,7 +142,7 @@ function CardFace({ value, suit }: { value: string; suit: Suit }) {
             gap: 4,
           }}
         >
-          {/* Decorative inner frame for face cards (looks like a real card canvas and won't overlap the corners) */}
+          {/* Decorative inner frame */}
           <div
             style={{
               position: "absolute",
@@ -218,21 +219,37 @@ function CardBack() {
   );
 }
 
-export default function CardDisplay({ card, drawCount }: CardDisplayProps) {
+// ─── Constants ───────────────────────────────────────────────────────────────
+const CARD_WIDTH = 260;
+const FLIP_THRESHOLD_DEG = 45; // degrees past which we commit the draw
+
+export default function CardDisplay({ card, drawCount, onDraw, canDraw }: CardDisplayProps) {
   const [phase, setPhase] = useState<"idle" | "face-down" | "face-up">("idle");
   const [displayedCard, setDisplayedCard] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Drag state ──────────────────────────────────────────────────────────────
+  const [dragAngle, setDragAngle] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false); // spring-back or snap
+  const startXRef = useRef(0);
+  const hasCommittedRef = useRef(false);
+  const springTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Auto-flip animation (triggered by drawCount from DB) ──────────────────
   useEffect(() => {
     if (card === null) return;
-
     if (timerRef.current) clearTimeout(timerRef.current);
 
-    // Phase 1: show card back (flip down)
+    // Reset drag state when a new card arrives
+    setIsDragging(false);
+    setDragAngle(0);
+    setIsAnimating(false);
+    hasCommittedRef.current = false;
+
     setPhase("face-down");
 
     timerRef.current = setTimeout(() => {
-      // Phase 2: swap card value (suit comes from card string), then flip up
       setDisplayedCard(card);
       timerRef.current = setTimeout(() => {
         setPhase("face-up");
@@ -245,52 +262,206 @@ export default function CardDisplay({ card, drawCount }: CardDisplayProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drawCount]);
 
+  // ── Pointer handlers ───────────────────────────────────────────────────────
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (!canDraw || phase === "face-down") return;
+      if (springTimerRef.current) clearTimeout(springTimerRef.current);
+      e.currentTarget.setPointerCapture(e.pointerId);
+      startXRef.current = e.clientX;
+      hasCommittedRef.current = false;
+      setIsDragging(true);
+      setIsAnimating(false);
+      setDragAngle(0);
+    },
+    [canDraw, phase]
+  );
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!isDragging) return;
+      const delta = Math.abs(e.clientX - startXRef.current);
+      // Map drag distance to rotateY: full card width / 2 = 90°
+      const angle = Math.min((delta / (CARD_WIDTH / 2)) * 90, 90);
+      setDragAngle(angle);
+    },
+    [isDragging]
+  );
+
+  const handlePointerUp = useCallback(() => {
+    if (!isDragging) return;
+    setIsDragging(false);
+
+    if (dragAngle >= FLIP_THRESHOLD_DEG && !hasCommittedRef.current) {
+      // ── Commit draw ──────────────────────────────────────────────────────
+      hasCommittedRef.current = true;
+      setIsAnimating(true);
+      // Snap to 90°, then reset so the drawCount effect takes over
+      setDragAngle(90);
+      springTimerRef.current = setTimeout(() => {
+        setDragAngle(0);
+        setIsAnimating(false);
+      }, 280);
+      onDraw?.();
+    } else {
+      // ── Spring back ──────────────────────────────────────────────────────
+      setIsAnimating(true);
+      setDragAngle(0);
+      springTimerRef.current = setTimeout(() => {
+        setIsAnimating(false);
+      }, 450);
+    }
+  }, [isDragging, dragAngle, onDraw]);
+
+  // ── Derived values ─────────────────────────────────────────────────────────
   const parsedValue = displayedCard ? cardValue(displayedCard) : "";
-  const parsedSuit = displayedCard ? (cardSuit(displayedCard) as Suit) : "\u2660";
+  const parsedSuit = displayedCard ? (cardSuit(displayedCard) as Suit) : "♠";
   const description = parsedValue ? (CARD_DESCRIPTIONS[parsedValue] ?? "") : "";
 
-  // Flip transform values
-  const cardStyle: React.CSSProperties = {
-    transition: "transform 0.32s cubic-bezier(0.4, 0, 0.2, 1)",
+  // When it's the player's turn, always show a draggable card back
+  // (overrides the previously drawn face-up card)
+  const showDraggableBack = canDraw && phase !== "face-down";
+
+  // ── Transform computation ──────────────────────────────────────────────────
+  let transform: string;
+  let transition: string;
+
+  if (showDraggableBack && (isDragging || dragAngle > 0)) {
+    // During active drag or snap/spring animation
+    if (isDragging) {
+      transition = "none";
+      transform = `rotateY(${dragAngle}deg) scale(0.97)`;
+    } else {
+      // Spring back: bouncy easing; Snap commit: snappy easing
+      const easing =
+        dragAngle === 90
+          ? "cubic-bezier(0.4, 0, 0.2, 1)"  // snap to 90
+          : "cubic-bezier(0.34, 1.56, 0.64, 1)"; // spring bounce back
+      transition = `transform 0.4s ${easing}`;
+      transform = `rotateY(${dragAngle}deg) scale(1)`;
+    }
+  } else if (phase === "face-down") {
+    transition = "transform 0.32s cubic-bezier(0.4, 0, 0.2, 1)";
+    transform = "rotateY(90deg) scale(0.92)";
+  } else {
+    transition = "transform 0.32s cubic-bezier(0.4, 0, 0.2, 1)";
+    transform = "rotateY(0deg) scale(1)";
+  }
+
+  const cardWrapperStyle: React.CSSProperties = {
+    transition,
     transformStyle: "preserve-3d",
-    transform:
-      phase === "face-down"
-        ? "rotateY(90deg) scale(0.92)"
-        : phase === "face-up"
-        ? "rotateY(0deg) scale(1)"
-        : "rotateY(0deg) scale(1)",
+    transform,
+    cursor: showDraggableBack
+      ? isDragging
+        ? "grabbing"
+        : "grab"
+      : "default",
+    userSelect: "none",
+    touchAction: "none", // prevent scroll hijack on mobile
   };
 
-  return (
-    <div className="flex flex-col items-center gap-6 py-6 px-6">
-      {/* Card */}
-      <div style={{ perspective: 800 }}>
-        <div style={cardStyle}>
-          {phase === "face-down" || !displayedCard ? (
-            <CardBack />
-          ) : (
-            <CardFace value={parsedValue} suit={parsedSuit} />
-          )}
-        </div>
-      </div>
+  // Drag progress ratio 0–1 for hint opacity
+  const dragProgress = dragAngle / FLIP_THRESHOLD_DEG;
 
-      {/* Description */}
-      {phase === "face-up" && displayedCard ? (
-        <div
-          className="max-w-[280px] text-center"
-          style={{
-            opacity: phase === "face-up" ? 1 : 0,
-            transform: phase === "face-up" ? "translateY(0)" : "translateY(8px)",
-            transition: "opacity 0.3s ease-out 0.15s, transform 0.3s ease-out 0.15s",
-          }}
-        >
-          <p className="text-white text-lg font-semibold leading-relaxed">
-            {description}
-          </p>
+  return (
+    <>
+      {/* Keyframe animations for the hint arrows */}
+      <style>{`
+        @keyframes nudgeLeft {
+          0%, 100% { transform: translateX(0); }
+          50% { transform: translateX(-5px); }
+        }
+        @keyframes nudgeRight {
+          0%, 100% { transform: translateX(0); }
+          50% { transform: translateX(5px); }
+        }
+      `}</style>
+
+      <div className="flex flex-col items-center gap-6 py-6 px-6">
+        {/* Card */}
+        <div style={{ perspective: 900 }}>
+          <div
+            style={cardWrapperStyle}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+          >
+            {showDraggableBack || phase === "face-down" || !displayedCard ? (
+              <CardBack />
+            ) : (
+              <CardFace value={parsedValue} suit={parsedSuit} />
+            )}
+          </div>
         </div>
-      ) : !displayedCard ? (
-        <p className="text-white/30 text-sm tracking-wide mt-2">รอจั่วไพ่...</p>
-      ) : null}
-    </div>
+
+        {/* Drag threshold progress bar — visible only when dragging */}
+        {showDraggableBack && isDragging && (
+          <div
+            style={{
+              width: 140,
+              height: 4,
+              borderRadius: 99,
+              background: "rgba(255,255,255,0.12)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                height: "100%",
+                width: `${Math.min(dragProgress * 100, 100)}%`,
+                borderRadius: 99,
+                background:
+                  dragProgress >= 1
+                    ? "oklch(0.72 0.2 145)"   // green = committed!
+                    : "oklch(0.65 0.22 230)",  // blue = dragging
+                transition: "background 0.15s",
+              }}
+            />
+          </div>
+        )}
+
+        {/* Drag hint — visible when it's the player's turn and not dragging */}
+        {showDraggableBack && !isDragging && !isAnimating && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              color: "rgba(255,255,255,0.45)",
+              fontSize: 13,
+              fontWeight: 600,
+              letterSpacing: "0.04em",
+              userSelect: "none",
+            }}
+          >
+            <span style={{ display: "inline-block", animation: "nudgeLeft 1.4s ease-in-out infinite" }}>
+              ←
+            </span>
+            ลากเพื่อพลิกไพ่
+            <span style={{ display: "inline-block", animation: "nudgeRight 1.4s ease-in-out infinite" }}>
+              →
+            </span>
+          </div>
+        )}
+
+        {/* Card description */}
+        {phase === "face-up" && !canDraw && displayedCard ? (
+          <div
+            className="max-w-[280px] text-center"
+            style={{
+              opacity: 1,
+              transform: "translateY(0)",
+              transition: "opacity 0.3s ease-out 0.15s, transform 0.3s ease-out 0.15s",
+            }}
+          >
+            <p className="text-white text-lg font-semibold leading-relaxed">{description}</p>
+          </div>
+        ) : !displayedCard && !canDraw ? (
+          <p className="text-white/30 text-sm tracking-wide mt-2">รอจั่วไพ่...</p>
+        ) : null}
+      </div>
+    </>
   );
 }
